@@ -1,5 +1,8 @@
 name: Apply Priority Label
 
+on:
+  workflow_call:
+  
 jobs:
   apply-label:
     runs-on: ubuntu-latest
