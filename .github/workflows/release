@@ -2,6 +2,11 @@ name: Release on Version Change
 
 on:
   workflow_call:
+    inputs:
+      project_name:
+        description: "The Xcode project name (without .xcodeproj extension)"
+        required: true
+        type: string
 
 jobs:
   release:
@@ -21,8 +26,8 @@ jobs:
           set -x
 
           # Extract current MARKETING_VERSION and CURRENT_PROJECT_VERSION
-          MARKETING_VERSION=$(grep -o 'MARKETING_VERSION = [0-9.]\+' Darwin/Funico.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
-          PBX_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Darwin/Funico.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
+          MARKETING_VERSION=$(grep -o 'MARKETING_VERSION = [0-9.]\+' Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
+          PBX_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
           ENV_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Skip.env | awk '{print $3}' | tail -1)
 
           echo "MARKETING_VERSION=$MARKETING_VERSION"
@@ -37,7 +42,7 @@ jobs:
           TAG="v$VERSION_STRING"
 
           # Extract previous MARKETING_VERSION from previous commit
-          PREV_MARKETING_VERSION=$(git show $PREV_SHA:Darwin/Funico.xcodeproj/project.pbxproj | grep -o 'MARKETING_VERSION = [0-9.]\+' | awk '{print $3}' | tail -1)
+          PREV_MARKETING_VERSION=$(git show $PREV_SHA:Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | grep -o 'MARKETING_VERSION = [0-9.]\+' | awk '{print $3}' | tail -1)
 
           # Determine if MARKETING_VERSION changed
           if [ "$MARKETING_VERSION" != "$PREV_MARKETING_VERSION" ]; then
