@@ -128,7 +128,10 @@ jobs:
               tag_name: tag,
               previous_tag_name: previousTag
             });
-            return notes.data.body
+
+            // Write the plain body to GITHUB_OUTPUT (not JSON)
+            const fs = require('fs');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `body<<EOF\n${notes.data.body}\nEOF\n`);
         env:
           TAG: ${{ steps.extract_versions.outputs.tag }}
           PREV_TAG: ${{ steps.detect_prev_tag.outputs.prev_tag || '' }}
@@ -140,8 +143,7 @@ jobs:
         with:
           tag_name: ${{ steps.extract_versions.outputs.tag }}
           name: ${{ steps.extract_versions.outputs.version }}
-          body: |
-            ${{ steps.release_notes.outputs.result }}
+          body: ${{ steps.release_notes.outputs.body }}
           prerelease: ${{ steps.extract_versions.outputs.major == '0' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
