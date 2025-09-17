@@ -1,0 +1,96 @@
+name: Release on Version Change
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous commit SHA
+        run: echo "PREV_SHA=$(git rev-parse HEAD^)" >> $GITHUB_ENV
+
+      - name: Extract versions
+        id: extract_versions
+        run: |
+          set -x
+
+          # Extract current MARKETING_VERSION and CURRENT_PROJECT_VERSION
+          MARKETING_VERSION=$(grep -o 'MARKETING_VERSION = [0-9.]\+' Darwin/Funico.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
+          PBX_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Darwin/Funico.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
+          ENV_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Skip.env | awk '{print $3}' | tail -1)
+
+          echo "MARKETING_VERSION=$MARKETING_VERSION"
+          echo "CURRENT_PROJECT_VERSION=$PBX_VERSION"
+          echo "ENV_VERSION=$ENV_VERSION"
+
+          # Split MARKETING_VERSION into MAJOR, MINOR, PATCH
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$MARKETING_VERSION"
+
+          # Derive tag from MARKETING_VERSION only
+          VERSION_STRING="$MAJOR.$MINOR.$PATCH"
+          TAG="v$VERSION_STRING"
+
+          # Extract previous MARKETING_VERSION from previous commit
+          PREV_MARKETING_VERSION=$(git show $PREV_SHA:Darwin/Funico.xcodeproj/project.pbxproj | grep -o 'MARKETING_VERSION = [0-9.]\+' | awk '{print $3}' | tail -1)
+
+          # Determine if MARKETING_VERSION changed
+          if [ "$MARKETING_VERSION" != "$PREV_MARKETING_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "major=$MAJOR" >> $GITHUB_OUTPUT
+            echo "version=$VERSION_STRING" >> $GITHUB_OUTPUT
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Detect previous tag
+        id: detect_prev_tag
+        if: steps.extract_versions.outputs.changed == 'true'
+        run: |
+          # Find the latest tag before this commit
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ || echo "")
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        if: steps.extract_versions.outputs.changed == 'true'
+        id: release_notes
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const tag = process.env.TAG;
+            const previousTag = process.env.PREV_TAG || "";
+            const notes = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              previous_tag_name: previousTag
+            });
+            return notes.data.body
+        env:
+          TAG: ${{ steps.extract_versions.outputs.tag }}
+          PREV_TAG: ${{ steps.detect_prev_tag.outputs.prev_tag || '' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create tag and release
+        if: steps.extract_versions.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.extract_versions.outputs.tag }}
+          name: ${{ steps.extract_versions.outputs.version }}
+          body: |
+            ${{ steps.release_notes.outputs.result }}
+          prerelease: ${{ steps.extract_versions.outputs.major == '0' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
