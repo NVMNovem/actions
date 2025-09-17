@@ -23,35 +23,86 @@ jobs:
       - name: Extract versions
         id: extract_versions
         run: |
-          set -x
+          set -xe
 
-          # Extract current MARKETING_VERSION and CURRENT_PROJECT_VERSION
+          # --- raw extraction from files ---
           MARKETING_VERSION=$(grep -o 'MARKETING_VERSION = [0-9.]\+' Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
-          PBX_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
-          ENV_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Skip.env | awk '{print $3}' | tail -1)
+          CURRENT_PROJECT_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | awk '{print $3}' | tail -1)
+          ENV_VERSION=$(grep -o 'CURRENT_PROJECT_VERSION = [0-9]\+' Skip.env | awk '{print $3}' | tail -1 || true)
 
           echo "MARKETING_VERSION=$MARKETING_VERSION"
-          echo "CURRENT_PROJECT_VERSION=$PBX_VERSION"
+          echo "CURRENT_PROJECT_VERSION=$CURRENT_PROJECT_VERSION"
           echo "ENV_VERSION=$ENV_VERSION"
 
-          # Split MARKETING_VERSION into MAJOR, MINOR, PATCH
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$MARKETING_VERSION"
+          # Fallback for build source if CURRENT_PROJECT_VERSION is empty
+          if [ -z "$CURRENT_PROJECT_VERSION" ] && [ -n "$ENV_VERSION" ]; then
+            CURRENT_PROJECT_VERSION="$ENV_VERSION"
+          fi
 
-          # Derive tag from MARKETING_VERSION only
+          # Digits-only version of marketing (e.g. "1.2.3" -> "123")
+          MARK_DIGITS=$(echo "${MARKETING_VERSION:-}" | tr -d -c '0-9')
+
+          # --- derive MAJOR.MINOR.PATCH (version string) ---
+          if [[ "$MARKETING_VERSION" == *.* ]]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$MARKETING_VERSION"
+            MAJOR=${MAJOR:-0}; MINOR=${MINOR:-0}; PATCH=${PATCH:-0}
+          else
+            # If marketing is numeric like "123", try to map to 1.2.3 (heuristic)
+            if [ -n "$MARK_DIGITS" ] && [ ${#MARK_DIGITS} -ge 3 ]; then
+              MAJOR=${MARK_DIGITS:0:1}
+              MINOR=${MARK_DIGITS:1:1}
+              PATCH=${MARK_DIGITS:2:1}
+            else
+              # Fallback: treat whole value as major
+              MAJOR=${MARK_DIGITS:-0}
+              MINOR=0
+              PATCH=0
+            fi
+          fi
+
           VERSION_STRING="$MAJOR.$MINOR.$PATCH"
-          TAG="v$VERSION_STRING"
 
-          # Extract previous MARKETING_VERSION from previous commit
-          PREV_MARKETING_VERSION=$(git show $PREV_SHA:Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj | grep -o 'MARKETING_VERSION = [0-9.]\+' | awk '{print $3}' | tail -1)
+          # --- derive BUILD number ---
+          BUILD_RAW="${CURRENT_PROJECT_VERSION:-}"
+          BUILD_NUMBER="$BUILD_RAW"
 
-          # Determine if MARKETING_VERSION changed
-          if [ "$MARKETING_VERSION" != "$PREV_MARKETING_VERSION" ]; then
+          # If build looks like combined (starts with MARK_DIGITS), strip the marketing prefix
+          if [ -n "$MARK_DIGITS" ] && [ -n "$BUILD_RAW" ] && [[ "$BUILD_RAW" == "${MARK_DIGITS}"* ]] && [ "${#BUILD_RAW}" -gt "${#MARK_DIGITS}" ]; then
+            BUILD_NUMBER="${BUILD_RAW:${#MARK_DIGITS}}"
+          fi
+
+          # If still empty, fallback to '0' (or choose another policy)
+          BUILD_NUMBER=$(echo "$BUILD_NUMBER" | sed 's/^0*//')
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER="0"
+          fi
+
+          TAG="v${VERSION_STRING}_${BUILD_NUMBER}"
+
+          echo "Derived: VERSION_STRING=$VERSION_STRING"
+          echo "Derived: BUILD_NUMBER=$BUILD_NUMBER"
+          echo "Derived: TAG=$TAG"
+
+          # Extract previous marketing version from previous commit (robust to dotted/non-dotted)
+          PREV_MARKETING_VERSION=$(git show $PREV_SHA:Darwin/${{ inputs.project_name }}.xcodeproj/project.pbxproj \
+            | grep -o 'MARKETING_VERSION = [0-9.]\+' | awk '{print $3}' | tail -1 || true)
+
+          # Decide whether marketing version changed (trigger for release)
+          if [ -n "$PREV_MARKETING_VERSION" ] && [ "$MARKETING_VERSION" != "$PREV_MARKETING_VERSION" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "major=$MAJOR" >> $GITHUB_OUTPUT
-            echo "version=$VERSION_STRING" >> $GITHUB_OUTPUT
-            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "version=$VERSION_STRING" >> $GITHUB_OUTPUT    # release name (no build)
+            echo "tag=$TAG" >> $GITHUB_OUTPUT                   # tag includes build
           else
-            echo "changed=false" >> $GITHUB_OUTPUT
+            # If previous marketing version couldn't be read, be conservative: if MARKETING_VERSION found, treat as changed
+            if [ -n "$MARKETING_VERSION" ] && [ -z "$PREV_MARKETING_VERSION" ]; then
+              echo "changed=true" >> $GITHUB_OUTPUT
+              echo "major=$MAJOR" >> $GITHUB_OUTPUT
+              echo "version=$VERSION_STRING" >> $GITHUB_OUTPUT
+              echo "tag=$TAG" >> $GITHUB_OUTPUT
+            else
+              echo "changed=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
       - name: Detect previous tag
