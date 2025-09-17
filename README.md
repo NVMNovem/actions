@@ -43,5 +43,5 @@ jobs:
   call-workflow:
     uses: NVMNovem/actions/.github/workflows/release.yml@v1
     with:
-      project_name: Funico
+      project_name: YourXcodeProjectName
 ```
