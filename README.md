@@ -22,3 +22,26 @@ jobs:
   call-workflow:
     uses: NVMNovem/actions/.github/workflows/priorityLabel.yml@v1
 ```
+
+## Release
+
+For releasing a new version when the project version changes,
+create a `.github/workflows/release.yml` file like this:
+
+```yaml
+name: Release
+
+permissions:
+  contents: write
+  
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  call-workflow:
+    uses: NVMNovem/actions/.github/workflows/release.yml@v1
+    with:
+      project_name: Funico
+```
