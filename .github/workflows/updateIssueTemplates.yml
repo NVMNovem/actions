@@ -1,4 +1,4 @@
-name: Update Issue Template Versions
+name: Update Issue Templates
           
 on:
   workflow_call:
