@@ -1,12 +1,12 @@
 name: Update Issue Template Versions
-
+          
 on:
   workflow_call:
     inputs:
-      template:
-        description: "The name of the template that should be updated."
+      templates:
+        description: "A list of template names that should be updated."
         required: true
-        type: string
+        type: array
 
 jobs:
   update-issue-template:
@@ -36,15 +36,20 @@ jobs:
         run: |
           RELEASE_OPTIONS=$(printf -- "%s\n" $RELEASES | awk '!seen[$0]++' | awk '{print "- " $0}')
           export RELEASE_OPTIONS
-          yq e '
-            (.body[] | select(.type == "dropdown" and .id == "version").attributes.options) = env(RELEASE_OPTIONS)
-          ' -i .github/ISSUE_TEMPLATE/${{ inputs.template }}.yml
+          
+          for TEMPLATE in "${{ inputs.templates[@] }}"; do
+            yq e '
+              (.body[] | select(.type == "dropdown" and .id == "version").attributes.options) = env(RELEASE_OPTIONS)
+            ' -i ".github/ISSUE_TEMPLATE/${TEMPLATE}.yml"
+          done
 
       - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/ISSUE_TEMPLATE/${{ inputs.template }}.yml
+          for TEMPLATE in "${{ inputs.templates[@] }}"; do
+            git add ".github/ISSUE_TEMPLATE/${TEMPLATE}.yml"
+          done
           git commit -m "Update releases in ussue templates" || echo "No changes to commit"
           git push
         env:
