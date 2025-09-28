@@ -1,0 +1,52 @@
+name: Update Issue Template Versions
+
+on:
+  workflow_run:
+    workflows: [release]
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+jobs:
+  update-issue-template:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch all releases
+        id: releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all release titles (one per line)
+          RELEASES=$(gh release list --limit 100 --json name -q '.[].name')
+
+          echo "Found releases:"
+          echo "$RELEASES"
+
+          # You can export RELEASES if you want to use it in the next step, e.g.:
+          echo "RELEASES<<EOF" >> $GITHUB_ENV
+          echo "$RELEASES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Update bug report template
+        run: |
+          RELEASE_OPTIONS=$(printf -- "%s\n" $RELEASES | awk '!seen[$0]++' | awk '{print "- " $0}')
+          export RELEASE_OPTIONS
+          yq e '
+            (.body[] | select(.type == "dropdown" and .id == "version").attributes.options) = env(RELEASE_OPTIONS)
+          ' -i .github/ISSUE_TEMPLATE/Bug.yml
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/ISSUE_TEMPLATE/Bug.yml
+          git commit -m "Update releases in ussue templates" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
