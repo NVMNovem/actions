@@ -4,9 +4,9 @@ on:
   workflow_call:
     inputs:
       templates:
-        description: "A list of template names that should be updated."
+        description: "A comma-separated list of template names that should be updated."
         required: true
-        type: array
+        type: string
 
 jobs:
   update-issue-template:
@@ -37,7 +37,8 @@ jobs:
           RELEASE_OPTIONS=$(printf -- "%s\n" $RELEASES | awk '!seen[$0]++' | awk '{print "- " $0}')
           export RELEASE_OPTIONS
           
-          for TEMPLATE in "${{ inputs.templates[@] }}"; do
+          IFS=',' read -ra TEMPLATE_ARRAY <<< "${{ inputs.templates }}"
+          for TEMPLATE in "${TEMPLATE_ARRAY[@]}"; do
             yq e '
               (.body[] | select(.type == "dropdown" and .id == "version").attributes.options) = env(RELEASE_OPTIONS)
             ' -i ".github/ISSUE_TEMPLATE/${TEMPLATE}.yml"
@@ -47,7 +48,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for TEMPLATE in "${{ inputs.templates[@] }}"; do
+          IFS=',' read -ra TEMPLATE_ARRAY <<< "${{ inputs.templates }}"
+          for TEMPLATE in "${TEMPLATE_ARRAY[@]}"; do
             git add ".github/ISSUE_TEMPLATE/${TEMPLATE}.yml"
           done
           git commit -m "Update releases in ussue templates" || echo "No changes to commit"
