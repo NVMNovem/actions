@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        template: ["Bug"]
+        template: ["Bug", "Change", "Feature"]
 
     steps:
       - name: Checkout repository
