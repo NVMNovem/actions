@@ -66,5 +66,7 @@ jobs:
   call-workflow:
     uses: NVMNovem/actions/.github/workflows/updateIssueTemplates.yml@v1
     with:
-      templates: [Bug, Change]
+      templates:
+        - Bug
+        - Change
 ```
