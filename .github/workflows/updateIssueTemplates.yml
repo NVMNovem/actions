@@ -1,13 +1,12 @@
 name: Update Issue Template Versions
 
 on:
-  workflow_run:
-    workflows: [release]
-    types:
-      - completed
-
-permissions:
-  contents: write
+  workflow_call:
+    inputs:
+      templates:
+        description: "A collection of the templates that should be updated."
+        required: true
+        type: string
 
 jobs:
   update-issue-template:
