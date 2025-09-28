@@ -45,3 +45,26 @@ jobs:
     with:
       project_name: YourXcodeProjectName
 ```
+
+## Update Issue Templates
+
+For updating the issue templates after a new release,
+create a `.github/workflows/updateIssueTemplates.yml` file like this:
+
+```yaml
+name: Update Issue Templates
+
+permissions:
+  contents: write
+  
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  call-workflow:
+    uses: NVMNovem/actions/.github/workflows/updateIssueTemplates.yml@v1
+    with:
+      templates: [Bug, Change]
+```
