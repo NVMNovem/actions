@@ -60,8 +60,6 @@ jobs:
             fi
           fi
 
-          VERSION_STRING="$MAJOR.$MINOR.$PATCH"
-
           # --- derive BUILD number ---
           BUILD_RAW="${CURRENT_PROJECT_VERSION:-}"
           BUILD_NUMBER="$BUILD_RAW"
@@ -74,10 +72,11 @@ jobs:
           # If still empty, fallback to '0' (or choose another policy)
           BUILD_NUMBER=$(echo "$BUILD_NUMBER" | sed 's/^0*//')
           if [ -z "$BUILD_NUMBER" ]; then
-            BUILD_NUMBER="0"
+            BUILD_NUMBER="01"
           fi
 
-          TAG="v${VERSION_STRING}_${BUILD_NUMBER}"
+          TAG="$MAJOR.$MINOR.$PATCH"
+          VERSION_STRING="${TAG} - ${BUILD_NUMBER}"
 
           echo "Derived: VERSION_STRING=$VERSION_STRING"
           echo "Derived: BUILD_NUMBER=$BUILD_NUMBER"
