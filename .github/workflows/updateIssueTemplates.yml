@@ -39,6 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull
           git add ".github/ISSUE_TEMPLATE/${{ matrix.template }}.yml"
           git commit -m "Update releases in issue template ${{ matrix.template }}" || echo "No changes to commit"
           git push
