@@ -53,7 +53,7 @@ jobs:
     needs: checkout-repos
     strategy:
       matrix:
-        os: ${{ fromJSON('["' + inputs.platforms.replace(',', '","') + '"]') }}
+        os: ${{ fromJSON(format('["{0}"]', join('","', inputs.platforms.split(',')))) }}
     runs-on: ${{ matrix.os }}
 
     steps:
