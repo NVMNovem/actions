@@ -1,0 +1,68 @@
+name: build-and-test
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        type: string
+        default: "macos-latest,ubuntu-latest,windows-latest"
+
+      mode:
+        type: string
+        default: "build,test"  # example: build | test | build,test
+
+      checkouts:
+        type: string
+        default: "[]"
+        description: >
+          JSON array of entries: { "repo": "...", "key": "KEY_NAME", "path": "dir" }
+
+    secrets:
+      deploy_keys:
+        required: false
+        description: >
+          JSON object mapping key names to SSH secrets.
+
+
+jobs:
+  checkout-repos:
+    if: ${{ inputs.checkouts != '[]' }}
+    strategy:
+      matrix:
+        item: ${{ fromJSON(inputs.checkouts) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout private repo
+        if: ${{ contains(keys(matrix.item), 'key') }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.item.repo }}
+          ssh-key: ${{ fromJSON(secrets.deploy_keys)[matrix.item.key] }}
+          path: ${{ matrix.item.path || matrix.item.repo }}
+
+      - name: Checkout public repo
+        if: ${{ !contains(keys(matrix.item), 'key') }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.item.repo }}
+          path: ${{ matrix.item.path || matrix.item.repo }}
+
+
+  build-test:
+    needs: checkout-repos
+    strategy:
+      matrix:
+        os: ${{ fromJSON(format('["{0}"]', inputs.platforms) | replace(',', '","')) }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        if: ${{ contains(inputs.mode, 'build') }}
+        run: swift build
+
+      - name: Test
+        if: ${{ contains(inputs.mode, 'test') }}
+        run: swift test
